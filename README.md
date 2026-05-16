@@ -1,36 +1,81 @@
 # SaaS Boilerplate
 
-A production-ready Next.js SaaS starter with auth, MongoDB, Creem payments, and shadcn/ui.
+A production-ready, modular Next.js SaaS starter with auth, MongoDB, Creem payments, and shadcn/ui.
 
 ## Stack
 
-- **Framework** — Next.js 15 (App Router, TypeScript)
+- **Framework** — Next.js 16 (App Router, TypeScript)
 - **UI** — shadcn/ui + Tailwind CSS v4
-- **Auth** — NextAuth v5 (Google + GitHub OAuth, JWT sessions)
+- **Auth** — NextAuth v5 (Google + GitHub OAuth, JWT sessions, flag-gated)
 - **Database** — MongoDB via Mongoose
-- **Payments** — Creem (subscriptions, webhooks)
+- **Payments** — Creem (subscriptions, webhooks, HMAC-verified)
 
 ## Project Structure
 
 ```
 src/
-├── app/
-│   ├── (auth)/login/           # Sign-in page (Google + GitHub)
+├── actions/                    # Server actions (never imported by client directly)
+│   ├── auth.ts                 # signInWithGoogle, signInWithGitHub, signOutUser
+│   ├── payments.ts             # startCheckout, cancelPlan
+│   └── index.ts
+│
+├── app/                        # Routing only — no business logic here
+│   ├── (auth)/login/           # Sign-in page
 │   ├── (dashboard)/
-│   │   ├── layout.tsx          # Navbar with avatar + sign out
-│   │   └── dashboard/          # Protected dashboard with plan info
+│   │   ├── layout.tsx          # Auth-gated layout with Navbar
+│   │   └── dashboard/          # User dashboard
 │   ├── api/
-│   │   ├── auth/[...nextauth]/ # NextAuth handler
-│   │   └── webhooks/creem/     # Creem webhook (subscription events)
-│   ├── pricing/                # Pricing page (Free / Monthly / Yearly)
+│   │   ├── auth/[...nextauth]/ # NextAuth route handler
+│   │   └── webhooks/creem/     # Creem subscription webhook
+│   ├── pricing/                # Public pricing page
 │   └── page.tsx                # Landing page
-├── lib/
-│   ├── auth.ts                 # NextAuth config
-│   ├── creem.ts                # Creem API client + webhook verifier
-│   └── mongodb.ts              # Mongoose connection (cached)
+│
+├── components/
+│   ├── shared/                 # App-level reusable components
+│   │   ├── navbar.tsx          # Authenticated top nav
+│   │   ├── auth-buttons.tsx    # Provider-gated sign-in buttons
+│   │   └── plan-badge.tsx      # Plan + status display badge
+│   └── ui/                     # shadcn/ui primitives (do not edit)
+│
+├── config/                     # All env vars and feature flags in one place
+│   ├── app.ts                  # App name, URL, description
+│   ├── auth.ts                 # Provider enable flags
+│   ├── payments.ts             # Creem API base + product IDs
+│   └── index.ts
+│
+├── constants/                  # Static app-wide values
+│   ├── plans.ts                # PLANS array (id, price, features, productId)
+│   ├── routes.ts               # ROUTES, PROTECTED_ROUTES, AUTH_ROUTES
+│   └── index.ts
+│
+├── hooks/                      # Client-side React hooks
+│   ├── use-session.ts          # Thin wrapper around next-auth/react useSession
+│   ├── use-toast.ts            # Typed toast helpers via sonner
+│   └── index.ts
+│
+├── lib/                        # Pure infrastructure — no app logic
+│   ├── auth/
+│   │   ├── config.ts           # NextAuth provider + callback config
+│   │   └── index.ts            # Exports: handlers, auth, signIn, signOut
+│   ├── db/
+│   │   ├── connection.ts       # Cached Mongoose connection
+│   │   ├── adapter.ts          # MongoDBAdapter for NextAuth
+│   │   └── index.ts
+│   ├── payments/
+│   │   ├── creem.ts            # Creem API client (typed)
+│   │   ├── webhook.ts          # HMAC signature verifier (timing-safe)
+│   │   └── index.ts
+│   └── utils.ts                # cn() helper
+│
 ├── models/
-│   └── User.ts                 # User schema with plan/billing fields
-└── middleware.ts               # Route protection
+│   └── User.ts                 # Mongoose User schema (plan, billing fields)
+│
+├── types/                      # Shared TypeScript types
+│   ├── auth.ts                 # UserPlan, PlanStatus, UserSubscription + session augment
+│   ├── payments.ts             # CreemWebhookEvent, CheckoutSession
+│   └── index.ts
+│
+└── middleware.ts               # Route protection (reads from constants/routes)
 ```
 
 ## Setup
@@ -113,9 +158,38 @@ The webhook handler at `/api/webhooks/creem` handles:
 - `subscription.cancelled` / `subscription.expired` — reverts to free
 - `subscription.past_due` — marks plan as past due
 
+## Architecture Rules
+
+| Layer | Rule |
+|---|---|
+| `app/` | Routing + page shells only. Import from `actions/`, `components/`, `lib/`, `config/` |
+| `actions/` | Server actions only. All redirects and auth checks live here |
+| `lib/` | Pure infrastructure. No Next.js page imports, no business logic |
+| `config/` | Single source of truth for all env vars. Nothing reads `process.env` outside here (except `lib/db` and `lib/payments` for secrets) |
+| `constants/` | Static values derived from config. No side effects |
+| `components/shared/` | App-aware components (can use `auth`, `config`, `actions`) |
+| `components/ui/` | shadcn primitives — never modify directly |
+| `types/` | Types only — no runtime code |
+| `hooks/` | Client-only (`"use client"`) hooks |
+
 ## Extending
 
-- **Add a new OAuth provider** — import from `next-auth/providers/*` in `src/lib/auth.ts`
-- **Add new plan tiers** — update the `plan` enum in `src/models/User.ts` and add products to `src/app/pricing/page.tsx`
-- **Add email** — uncomment the email vars in `.env.example` and wire up Resend or similar
-- **Add new protected routes** — add paths to the `protectedRoutes` array in `src/middleware.ts`
+**Add an OAuth provider**
+1. Add `AUTH_<PROVIDER>_ENABLED`, `AUTH_<PROVIDER>_ID`, `AUTH_<PROVIDER>_SECRET` to `.env.example` and `.env.local`
+2. Add the flag to `src/config/auth.ts`
+3. Add the provider in `src/lib/auth/config.ts`
+4. Add a server action in `src/actions/auth.ts`
+5. Add a button in `src/components/shared/auth-buttons.tsx`
+
+**Add a new plan tier**
+1. Add a Creem product ID env var to `.env.example` + `src/config/payments.ts`
+2. Add the tier to `UserPlan` in `src/types/auth.ts` and the Mongoose enum in `src/models/User.ts`
+3. Add an entry to `PLANS` in `src/constants/plans.ts`
+
+**Add a protected route**
+1. Add the path to `PROTECTED_ROUTES` in `src/constants/routes.ts`
+
+**Add email**
+1. Uncomment email vars in `.env.example`
+2. Create `src/lib/email/` with your provider client (e.g. Resend)
+3. Call from `src/actions/`

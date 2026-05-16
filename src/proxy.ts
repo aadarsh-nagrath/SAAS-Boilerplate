@@ -1,24 +1,20 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
-
-const protectedRoutes = ["/dashboard"];
-const authRoutes = ["/login"];
+import { PROTECTED_ROUTES, AUTH_ROUTES, ROUTES } from "@/constants";
 
 export default auth((req) => {
   const { nextUrl, auth: session } = req;
   const isLoggedIn = !!session;
 
-  const isProtected = protectedRoutes.some((r) =>
-    nextUrl.pathname.startsWith(r)
-  );
-  const isAuthRoute = authRoutes.some((r) => nextUrl.pathname.startsWith(r));
+  const isProtected = PROTECTED_ROUTES.some((r) => nextUrl.pathname.startsWith(r));
+  const isAuthRoute = AUTH_ROUTES.some((r) => nextUrl.pathname.startsWith(r));
 
   if (isProtected && !isLoggedIn) {
-    return NextResponse.redirect(new URL("/login", nextUrl));
+    return NextResponse.redirect(new URL(ROUTES.login, nextUrl));
   }
 
   if (isAuthRoute && isLoggedIn) {
-    return NextResponse.redirect(new URL("/dashboard", nextUrl));
+    return NextResponse.redirect(new URL(ROUTES.dashboard, nextUrl));
   }
 
   return NextResponse.next();

@@ -1,13 +1,19 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { connectDB } from "@/lib/mongodb";
+import { connectDB } from "@/lib/db";
 import { User } from "@/models/User";
+import { ROUTES } from "@/constants";
+import { PlanBadge } from "@/components/shared";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import Link from "next/link";
+
+export const metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
   const session = await auth();
-  if (!session?.user) redirect("/login");
+  if (!session?.user) redirect(ROUTES.login);
 
   await connectDB();
   const user = await User.findOne({ email: session.user.email }).lean();
@@ -18,9 +24,7 @@ export default async function DashboardPage() {
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Dashboard</h1>
-        <Badge variant={planStatus === "active" ? "default" : "secondary"}>
-          {plan === "free" ? "Free" : `${plan} · ${planStatus}`}
-        </Badge>
+        <PlanBadge plan={plan} status={planStatus} />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -38,12 +42,12 @@ export default async function DashboardPage() {
           <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">Plan</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-2">
             <p className="font-medium capitalize">{plan}</p>
             {plan === "free" && (
-              <a href="/pricing" className="text-sm text-primary underline">
-                Upgrade to Pro →
-              </a>
+              <Link href={ROUTES.pricing} className={cn(buttonVariants({ size: "sm" }))}>
+                Upgrade to Pro
+              </Link>
             )}
           </CardContent>
         </Card>
