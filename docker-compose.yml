@@ -1,0 +1,33 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ${APP_SLUG:-boilerplate}-app
+    ports:
+      - "${HOST_PORT:-3000}:3000"
+    env_file:
+      - .env
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    networks:
+      - app-net
+
+  mongo:
+    image: mongo:7
+    container_name: ${APP_SLUG:-boilerplate}-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+    networks:
+      - app-net
+
+volumes:
+  mongo_data:
+
+networks:
+  app-net:
+    driver: bridge
