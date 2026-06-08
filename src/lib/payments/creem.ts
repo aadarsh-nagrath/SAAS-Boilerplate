@@ -42,6 +42,3 @@ export async function cancelSubscription(subscriptionId: string): Promise<void> 
   await creemFetch(`/subscriptions/${subscriptionId}/cancel`, { method: "POST" });
 }
 
-export async function getSubscriptions(customerId: string) {
-  return creemFetch(`/subscriptions?customer_id=${customerId}`);
-}

@@ -1,10 +1,14 @@
 import { MongoDBAdapter } from "@auth/mongodb-adapter";
-import { MongoClient } from "mongodb";
+import mongoose from "mongoose";
+import { connectDB } from "./connection";
 
-if (!process.env.MONGODB_URI) throw new Error("MONGODB_URI is not defined");
+// Reuse the Mongoose connection's underlying MongoClient so we don't
+// open a second connection pool just for the NextAuth adapter.
+async function getClient() {
+  await connectDB();
+  return mongoose.connection.getClient();
+}
 
-const client = new MongoClient(process.env.MONGODB_URI);
-
-export const mongoAdapter = MongoDBAdapter(client, {
+export const mongoAdapter = MongoDBAdapter(getClient(), {
   databaseName: process.env.MONGODB_DB_NAME,
 });

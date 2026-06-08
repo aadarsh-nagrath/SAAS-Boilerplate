@@ -1,2 +1,2 @@
-export { createCheckoutSession, cancelSubscription, getSubscriptions } from "./creem";
+export { createCheckoutSession, cancelSubscription } from "./creem";
 export { verifyWebhookSignature } from "./webhook";

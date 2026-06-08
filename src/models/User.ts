@@ -33,4 +33,7 @@ const UserSchema = new Schema<IUser>(
   { timestamps: true }
 );
 
+UserSchema.index({ email: 1 }, { unique: true });
+UserSchema.index({ creemCustomerId: 1 }, { sparse: true });
+
 export const User = models.User || model<IUser>("User", UserSchema);

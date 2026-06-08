@@ -1,8 +1,7 @@
 import { PLANS } from "@/constants";
-import { startCheckout } from "@/actions";
+import { CheckoutButton } from "@/components/shared";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -46,13 +45,12 @@ export default function PricingPage() {
 
               <CardFooter>
                 {plan.productId ? (
-                  <form className="w-full" action={startCheckout.bind(null, plan.productId)}>
-                    <Button className="w-full" type="submit">
-                      Get {plan.name}
-                    </Button>
-                  </form>
+                  <CheckoutButton productId={plan.productId} label={`Get ${plan.name}`} />
                 ) : (
-                  <Link href={ROUTES.dashboard} className={cn(buttonVariants({ variant: "outline" }), "w-full text-center")}>
+                  <Link
+                    href={ROUTES.dashboard}
+                    className={cn(buttonVariants({ variant: "outline" }), "w-full text-center")}
+                  >
                     Current plan
                   </Link>
                 )}
