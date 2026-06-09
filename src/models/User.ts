@@ -6,6 +6,8 @@ export interface IUser {
   email: string;
   image?: string;
   emailVerified?: Date;
+  // Credentials auth (set only when AUTH_CREDENTIALS_ENABLED). bcrypt hash.
+  passwordHash?: string;
   // Creem billing
   creemCustomerId?: string;
   plan: "free" | "monthly" | "yearly";
@@ -21,6 +23,7 @@ const UserSchema = new Schema<IUser>(
     email: { type: String, required: true, unique: true },
     image: { type: String },
     emailVerified: { type: Date },
+    passwordHash: { type: String, select: false },
     creemCustomerId: { type: String },
     plan: { type: String, enum: ["free", "monthly", "yearly"], default: "free" },
     planStatus: {

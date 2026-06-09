@@ -2,6 +2,7 @@ export const authConfig = {
   providers: {
     google: process.env.AUTH_GOOGLE_ENABLED === "true",
     github: process.env.AUTH_GITHUB_ENABLED === "true",
+    credentials: process.env.AUTH_CREDENTIALS_ENABLED === "true",
   },
   pages: {
     signIn: "/login",
