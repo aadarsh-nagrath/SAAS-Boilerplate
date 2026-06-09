@@ -43,7 +43,7 @@ function isDuplicate(eventId: string): boolean {
 
 export async function POST(req: NextRequest) {
   const payload = await req.text();
-  const signature = req.headers.get("x-creem-signature") ?? "";
+  const signature = req.headers.get("creem-signature") ?? "";
 
   if (!verifyWebhookSignature(payload, signature)) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
