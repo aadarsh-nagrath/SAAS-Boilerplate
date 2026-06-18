@@ -29,6 +29,11 @@ export async function sendMail(params: {
   html: string;
   text?: string;
 }): Promise<void> {
+  // NOTE: Gmail rewrites the From address to the authenticated GMAIL_USER
+  // account, so a MAIL_FROM on a *different* domain won't actually send "as"
+  // that domain (it appears as "<name> via gmail.com" at best, or is replaced).
+  // For true custom-domain sending, use a transactional provider (Resend,
+  // SES, Postmark) with verified DKIM instead of Gmail SMTP.
   const from = process.env.MAIL_FROM || process.env.GMAIL_USER!;
   await getTransporter().sendMail({
     from,

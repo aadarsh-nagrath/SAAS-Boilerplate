@@ -3,6 +3,7 @@ import { z } from "zod";
 import { verifyWebhookSignature } from "@/lib/payments";
 import { connectDB } from "@/lib/db";
 import { User } from "@/models/User";
+import { ProcessedWebhookEvent } from "@/models/ProcessedWebhookEvent";
 import { paymentsConfig } from "@/config";
 
 // ── Zod schema ────────────────────────────────────────────────────────────────
@@ -26,19 +27,27 @@ const CreemWebhookSchema = z.object({
   data: CreemEventDataSchema,
 });
 
-// ── In-memory idempotency set (evicts after 24h) ──────────────────────────────
-const processedEvents = new Map<string, number>();
-const IDEMPOTENCY_TTL = 24 * 60 * 60 * 1000;
+const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
 
-function isDuplicate(eventId: string): boolean {
-  const now = Date.now();
-  // Evict expired entries
-  for (const [id, ts] of processedEvents) {
-    if (now - ts > IDEMPOTENCY_TTL) processedEvents.delete(id);
+/**
+ * Records the event as processed. Returns false if it was already recorded
+ * (duplicate delivery). Backed by a unique index, so this is atomic and works
+ * across serverless instances — unlike an in-memory set.
+ */
+async function claimEvent(eventId: string): Promise<boolean> {
+  try {
+    await ProcessedWebhookEvent.create({
+      eventId,
+      expiresAt: new Date(Date.now() + IDEMPOTENCY_TTL_MS),
+    });
+    return true;
+  } catch (err: unknown) {
+    // Duplicate key => already processed.
+    if (typeof err === "object" && err !== null && "code" in err && (err as { code?: number }).code === 11000) {
+      return false;
+    }
+    throw err;
   }
-  if (processedEvents.has(eventId)) return true;
-  processedEvents.set(eventId, now);
-  return false;
 }
 
 export async function POST(req: NextRequest) {
@@ -66,23 +75,29 @@ export async function POST(req: NextRequest) {
 
   const event = parsed.data;
 
-  if (isDuplicate(event.id)) {
-    return NextResponse.json({ received: true, duplicate: true });
-  }
-
   try {
     await connectDB();
+
+    if (!(await claimEvent(event.id))) {
+      return NextResponse.json({ received: true, duplicate: true });
+    }
+
+    // Normalize so casing/whitespace differences don't silently miss the user.
+    const email = event.data.customer_email.toLowerCase().trim();
+    let result: { matchedCount: number } | null = null;
 
     switch (event.type) {
       case "subscription.active":
       case "subscription.renewed": {
-        const { customer_email, customer_id, product_id, current_period_end } = event.data;
+        const { customer_id, product_id, subscription_id, current_period_end } =
+          event.data;
         const plan =
           product_id === paymentsConfig.creem.products.yearly ? "yearly" : "monthly";
-        await User.findOneAndUpdate(
-          { email: customer_email },
+        result = await User.updateOne(
+          { email },
           {
             creemCustomerId: customer_id,
+            creemSubscriptionId: subscription_id,
             plan,
             planStatus: "active",
             planExpiresAt: current_period_end
@@ -94,19 +109,29 @@ export async function POST(req: NextRequest) {
       }
       case "subscription.cancelled":
       case "subscription.expired": {
-        await User.findOneAndUpdate(
-          { email: event.data.customer_email },
-          { plan: "free", planStatus: "cancelled", planExpiresAt: null }
+        result = await User.updateOne(
+          { email },
+          {
+            plan: "free",
+            planStatus: "cancelled",
+            planExpiresAt: null,
+            creemSubscriptionId: null,
+          }
         );
         break;
       }
       case "subscription.past_due": {
-        await User.findOneAndUpdate(
-          { email: event.data.customer_email },
-          { planStatus: "past_due" }
-        );
+        result = await User.updateOne({ email }, { planStatus: "past_due" });
         break;
       }
+    }
+
+    // A real payment event that matches no user is a data-integrity problem
+    // we want surfaced, not swallowed behind a 200.
+    if (result && result.matchedCount === 0) {
+      console.error(
+        `[creem-webhook] No user matched for ${event.type} (event ${event.id}, email ${email})`
+      );
     }
   } catch (err) {
     console.error("[creem-webhook] DB error:", err);

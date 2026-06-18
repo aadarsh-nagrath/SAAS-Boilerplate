@@ -3,11 +3,21 @@ import type { CheckoutSession } from "@/types";
 
 const { apiBase } = paymentsConfig.creem;
 
+function getApiKey(): string {
+  const key = process.env.CREEM_API_KEY;
+  if (!key) {
+    throw new Error(
+      "CREEM_API_KEY is not set — required to call the Creem API."
+    );
+  }
+  return key;
+}
+
 async function creemFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${apiBase}${path}`, {
     ...options,
     headers: {
-      "x-api-key": process.env.CREEM_API_KEY!,
+      "x-api-key": getApiKey(),
       "Content-Type": "application/json",
       ...options.headers,
     },

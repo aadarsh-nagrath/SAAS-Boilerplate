@@ -10,6 +10,7 @@ export interface IUser {
   passwordHash?: string;
   // Creem billing
   creemCustomerId?: string;
+  creemSubscriptionId?: string;
   plan: "free" | "monthly" | "yearly";
   planStatus: "active" | "inactive" | "cancelled" | "past_due";
   planExpiresAt?: Date;
@@ -20,11 +21,18 @@ export interface IUser {
 const UserSchema = new Schema<IUser>(
   {
     name: { type: String, required: true },
-    email: { type: String, required: true, unique: true },
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+    },
     image: { type: String },
     emailVerified: { type: Date },
     passwordHash: { type: String, select: false },
     creemCustomerId: { type: String },
+    creemSubscriptionId: { type: String },
     plan: { type: String, enum: ["free", "monthly", "yearly"], default: "free" },
     planStatus: {
       type: String,

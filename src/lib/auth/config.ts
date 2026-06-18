@@ -1,31 +1,16 @@
 import type { NextAuthConfig } from "next-auth";
-import Google from "next-auth/providers/google";
-import GitHub from "next-auth/providers/github";
 import Credentials from "next-auth/providers/credentials";
 import { compare } from "bcryptjs";
 import { z } from "zod";
 import { authConfig } from "@/config";
 import { mongoAdapter } from "@/lib/db";
+import { baseAuthConfig } from "./auth.config";
 
-const providers: NextAuthConfig["providers"] = [];
+// ── Full (Node-runtime) config ────────────────────────────────────────────────
+// Extends the edge-safe base with the MongoDB adapter and the Credentials
+// provider (which needs bcrypt + Mongoose). Used only by the API route handler.
 
-if (authConfig.providers.google) {
-  providers.push(
-    Google({
-      clientId: process.env.AUTH_GOOGLE_ID,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET,
-    })
-  );
-}
-
-if (authConfig.providers.github) {
-  providers.push(
-    GitHub({
-      clientId: process.env.AUTH_GITHUB_ID,
-      clientSecret: process.env.AUTH_GITHUB_SECRET,
-    })
-  );
-}
+const providers = [...baseAuthConfig.providers];
 
 if (authConfig.providers.credentials) {
   const CredentialsSchema = z.object({
@@ -44,8 +29,6 @@ if (authConfig.providers.credentials) {
         if (!parsed.success) return null;
         const { email, password } = parsed.data;
 
-        // Imported lazily so the adapter/Mongoose models aren't pulled into
-        // edge/middleware bundles that only need the base auth config.
         const { connectDB } = await import("@/lib/db");
         const { User } = await import("@/models/User");
         await connectDB();
@@ -79,18 +62,7 @@ if (authConfig.providers.credentials) {
 }
 
 export const authOptions: NextAuthConfig = {
+  ...baseAuthConfig,
   adapter: mongoAdapter,
   providers,
-  session: authConfig.session,
-  pages: authConfig.pages,
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) token.id = user.id;
-      return token;
-    },
-    async session({ session, token }) {
-      if (session.user) session.user.id = token.id as string;
-      return session;
-    },
-  },
 };

@@ -12,12 +12,13 @@ export async function startCheckout(productId: string) {
   const session = await auth();
   if (!session?.user?.email) redirect(ROUTES.login);
 
+  const email = session.user.email.toLowerCase();
   await connectDB();
-  const user = await User.findOne({ email: session.user.email }).lean();
+  const user = await User.findOne({ email }).lean();
 
   const checkout = await createCheckoutSession({
     productId,
-    customerEmail: session.user.email,
+    customerEmail: email,
     customerId: user?.creemCustomerId ?? undefined,
     successUrl: `${appConfig.url}${ROUTES.dashboard}?upgraded=true`,
   });
@@ -25,10 +26,22 @@ export async function startCheckout(productId: string) {
   redirect(checkout.url);
 }
 
-export async function cancelPlan(subscriptionId: string) {
+// Cancels the *current user's* subscription. The subscription id is looked up
+// from their own record — never taken from the client — so a user can't cancel
+// someone else's subscription (IDOR).
+export async function cancelPlan() {
   const session = await auth();
-  if (!session?.user) redirect(ROUTES.login);
+  if (!session?.user?.email) redirect(ROUTES.login);
 
-  await cancelSubscription(subscriptionId);
+  await connectDB();
+  const user = await User.findOne({ email: session.user.email.toLowerCase() })
+    .select("creemSubscriptionId")
+    .lean<{ creemSubscriptionId?: string }>();
+
+  if (!user?.creemSubscriptionId) {
+    throw new Error("No active subscription to cancel.");
+  }
+
+  await cancelSubscription(user.creemSubscriptionId);
   redirect(ROUTES.dashboard);
 }
