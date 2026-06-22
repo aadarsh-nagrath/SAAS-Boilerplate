@@ -1,5 +1,7 @@
 import "server-only";
 import nodemailer, { type Transporter } from "nodemailer";
+import { emailConfig } from "@/config";
+import { sendWithResend } from "./resend";
 
 let transporter: Transporter | null = null;
 
@@ -29,6 +31,14 @@ export async function sendMail(params: {
   html: string;
   text?: string;
 }): Promise<void> {
+  // When RESEND_ENABLE=true, route transactional email through Resend, which
+  // supports true custom-domain sending with verified DKIM. Otherwise fall
+  // back to Gmail SMTP below.
+  if (emailConfig.resend.enabled) {
+    await sendWithResend(params);
+    return;
+  }
+
   // NOTE: Gmail rewrites the From address to the authenticated GMAIL_USER
   // account, so a MAIL_FROM on a *different* domain won't actually send "as"
   // that domain (it appears as "<name> via gmail.com" at best, or is replaced).
